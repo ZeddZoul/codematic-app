@@ -1,48 +1,34 @@
 {
-  "name": "app",
+  "name": "themis-checker",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
   "scripts": {
-    "build": "tsc",
-    "start:server": "ts-node src/index.ts",
-    "start:worker": "ts-node src/worker.ts",
-    "seed:rules": "ts-node src/utils/seedRules.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ZeddZoul/codematic-app.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/ZeddZoul/codematic-app/issues"
-  },
-  "homepage": "https://github.com/ZeddZoul/codematic-app#readme",
   "dependencies": {
-    "@google/genai": "^1.28.0",
-    "bullmq": "^5.62.1",
-    "dotenv": "^17.2.3",
-    "express": "^5.1.0",
-    "express-rate-limit": "^8.2.0",
-    "firebase": "^12.5.0",
-    "firebase-admin": "^13.5.0",
-    "fs-extra": "^11.3.2",
-    "ioredis": "^5.8.2",
-    "morgan": "^1.10.1",
-    "simple-git": "^3.29.0",
-    "uuid": "^13.0.0"
+    "@google/generative-ai": "^0.24.1",
+    "@octokit/auth-app": "^8.1.2",
+    "@prisma/client": "^6.19.0",
+    "iron-session": "^8.0.4",
+    "next": "14.2.3",
+    "next-auth": "^4.24.13",
+    "octokit": "^5.0.5",
+    "react": "^18",
+    "react-dom": "^18"
   },
   "devDependencies": {
-    "@types/express": "^5.0.5",
-    "@types/fs-extra": "^11.0.4",
-    "@types/morgan": "^1.9.10",
-    "@types/node": "^24.9.2",
-    "@types/uuid": "^10.0.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.22",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.3",
+    "postcss": "^8",
+    "prisma": "^6.19.0",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
   }
 }
