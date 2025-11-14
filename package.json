@@ -6,20 +6,30 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "analyze": "ANALYZE=true next build",
+    "check-bundle-size": "node scripts/check-bundle-size.js",
+    "validate": "node scripts/run-all-validations.js",
+    "validate:query": "node scripts/validate-tanstack-query.js",
+    "validate:ui": "node scripts/validate-ui-components.js",
+    "validate:performance": "node scripts/validate-performance.js",
+    "validate:a11y": "node scripts/validate-accessibility.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@octokit/auth-app": "^8.1.2",
     "@prisma/client": "^6.19.0",
+    "@tanstack/react-query": "^5.90.9",
     "iron-session": "^8.0.4",
     "next": "14.2.3",
     "next-auth": "^4.24.13",
     "octokit": "^5.0.5",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "react-icons": "^5.5.0"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.0.3",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
