@@ -45,7 +45,7 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen" style={{ backgroundColor: colors.background.main }}>
       {/* Desktop Sidebar - hidden on mobile */}
-      <div className="hidden lg:block">
+      <div className="hidden lg:block" style={{ zIndex: 1100 }}>
         <Sidebar />
       </div>
 
@@ -57,15 +57,15 @@ export default function DashboardLayout({
 
       {/* Main Content Area */}
       <div 
-        className="transition-all duration-200 ease-in-out"
-        style={{
-          marginLeft: isMounted ? `${sidebarWidth}px` : '240px',
-        }}
+        className="transition-all duration-200 ease-in-out relative z-[1]"
       >
         <style jsx>{`
-          @media (max-width: 1023px) {
+          div {
+            margin-left: 0;
+          }
+          @media (min-width: 1024px) {
             div {
-              margin-left: 0 !important;
+              margin-left: ${isMounted ? `${sidebarWidth}px` : '240px'};
             }
           }
         `}</style>

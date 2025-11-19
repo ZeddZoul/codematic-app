@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 
 interface CheckRequest {
   repoId: number;
-  checkType: 'APPLE_APP_STORE' | 'GOOGLE_PLAY_STORE' | 'BOTH';
+  checkType: 'APPLE_APP_STORE' | 'GOOGLE_PLAY_STORE' | 'CHROME_WEB_STORE' | 'MOBILE_PLATFORMS';
   branchName?: string;
 }
 
@@ -40,10 +40,14 @@ export async function POST(request: NextRequest) {
       branch
     );
 
+    console.log(`[Checks API] Created checkRunId: ${checkRunId}, verifying it exists...`);
+
     // Fetch the saved check run to return results
     const checkRun = await prisma.checkRun.findUnique({
       where: { id: checkRunId },
     });
+
+    console.log(`[Checks API] CheckRun verification: ${checkRun ? 'FOUND' : 'NOT FOUND'} - ${checkRunId}`);
 
     if (!checkRun) {
       throw new Error('Failed to retrieve check run results');

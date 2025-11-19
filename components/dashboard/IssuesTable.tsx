@@ -1,20 +1,23 @@
 'use client';
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import { colors } from '@/lib/design-system';
 import { Badge } from '@/components/ui/badge';
 import { DynamicIcon } from '@/lib/icons';
 import { MdDescription } from 'react-icons/md';
+import { FaTrash } from 'react-icons/fa';
 import { getCheckRunErrorMessage } from '@/lib/error-messages';
 import { InlineError } from '@/components/ui/error-display';
+import { Pagination } from '@/components/ui/pagination';
 
-type Platform = 'APPLE_APP_STORE' | 'GOOGLE_PLAY_STORE';
+type Platform = 'APPLE_APP_STORE' | 'GOOGLE_PLAY_STORE' | 'CHROME_WEB_STORE' | 'MOBILE_PLATFORMS';
 type Severity = 'high' | 'medium' | 'low' | 'none';
 
 export interface CheckRun {
   id: string;
   repositoryName: string;
   platforms: Platform[];
+  branchName?: string;
   checkDate: Date;
   highestSeverity: Severity;
   totalIssues: number;
@@ -27,6 +30,7 @@ export interface CheckRun {
 interface IssuesTableProps {
   checkRuns: CheckRun[];
   onRowClick: (checkRun: CheckRun) => void;
+  onDelete?: (checkRunIds: string[]) => Promise<void>;
 }
 
 const severityConfig = {
@@ -51,10 +55,36 @@ const severityConfig = {
 const platformLabels: Record<Platform, string> = {
   APPLE_APP_STORE: 'Apple App Store',
   GOOGLE_PLAY_STORE: 'Google Play Store',
+  CHROME_WEB_STORE: 'Chrome Web Store',
+  MOBILE_PLATFORMS: 'Mobile Platforms',
 };
 
-export function IssuesTable({ checkRuns, onRowClick }: IssuesTableProps) {
+export function IssuesTable({ checkRuns, onRowClick, onDelete }: IssuesTableProps) {
   const tableRef = useRef<HTMLTableElement>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Calculate pagination
+  const totalPages = Math.ceil(checkRuns.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedCheckRuns = checkRuns.slice(startIndex, endIndex);
+  
+  // Reset selection when checkRuns change
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [checkRuns]);
+  
+  // Reset to page 1 when checkRuns change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [checkRuns]);
 
   const formatDate = useCallback((date: Date) => {
     const d = new Date(date);
@@ -69,8 +99,55 @@ export function IssuesTable({ checkRuns, onRowClick }: IssuesTableProps) {
 
   const formatPlatforms = useCallback((platforms: Platform[]) => {
     if (platforms.length === 0) return 'N/A';
-    if (platforms.length === 2) return 'Both';
-    return platformLabels[platforms[0]];
+    if (platforms.length === 1) return platformLabels[platforms[0]];
+    if (platforms.length === 2 && platforms.includes('APPLE_APP_STORE') && platforms.includes('GOOGLE_PLAY_STORE')) {
+      return 'Mobile Platforms';
+    }
+    // For multiple platforms, show them separated by commas
+    return platforms.map(p => platformLabels[p]).join(', ');
+  }, []);
+
+  // Selection handlers
+  const handleSelectAll = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    if (selectedIds.size === paginatedCheckRuns.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(paginatedCheckRuns.map(run => run.id)));
+    }
+  }, [selectedIds.size, paginatedCheckRuns]);
+
+  const handleSelectItem = useCallback((e: React.ChangeEvent<HTMLInputElement>, id: string) => {
+    e.stopPropagation();
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  }, [selectedIds]);
+
+  // Action handlers
+  const handleDelete = useCallback(async () => {
+    if (!onDelete || selectedIds.size === 0) return;
+    
+    setIsDeleting(true);
+    try {
+      await onDelete(Array.from(selectedIds));
+      setSelectedIds(new Set());
+    } catch (error) {
+      console.error('Failed to delete check runs:', error);
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [onDelete, selectedIds]);
+
+
+
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page);
+    setSelectedIds(new Set()); // Clear selection when changing pages
   }, []);
 
   /**
@@ -138,23 +215,107 @@ export function IssuesTable({ checkRuns, onRowClick }: IssuesTableProps) {
     );
   }
 
+  const hasActions = onDelete;
+  const allSelected = selectedIds.size === paginatedCheckRuns.length && paginatedCheckRuns.length > 0;
+  const someSelected = selectedIds.size > 0;
+
   return (
     <>
+      {/* Action Bar - Only show delete functionality */}
+      {onDelete && (
+        <div className="flex items-center justify-between gap-4 p-4 border-b" style={{ borderColor: colors.text.secondary + '20' }}>
+          <div className="flex items-center gap-3">
+            {paginatedCheckRuns.length > 0 && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <div className="relative flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 rounded border-2 focus:ring-2 focus:ring-offset-2 appearance-none cursor-pointer transition-all duration-200 hover:border-opacity-80"
+                    style={{
+                      borderColor: allSelected ? colors.primary.accent : colors.text.secondary + '60',
+                      backgroundColor: allSelected ? colors.primary.accent : 'transparent',
+                      '--tw-ring-color': colors.primary.accent,
+                    } as React.CSSProperties}
+                    onMouseEnter={(e) => {
+                      if (!allSelected) {
+                        e.currentTarget.style.borderColor = colors.primary.accent + '80';
+                        e.currentTarget.style.backgroundColor = colors.primary.accent + '10';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!allSelected) {
+                        e.currentTarget.style.borderColor = colors.text.secondary + '60';
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
+                    }}
+                  />
+                  {allSelected && (
+                    <svg
+                      className="absolute w-3 h-3 text-white pointer-events-none"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  )}
+                </div>
+                <span className="text-sm font-medium" style={{ color: colors.text.primary }}>
+                  {allSelected ? 'Deselect All' : 'Select All'}
+                </span>
+              </label>
+            )}
+            {someSelected && (
+              <span className="text-sm" style={{ color: colors.text.secondary }}>
+                {selectedIds.size} selected
+              </span>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {someSelected && (
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm font-medium"
+                style={{
+                  backgroundColor: colors.status.error,
+                  color: 'white',
+                  opacity: isDeleting ? 0.6 : 1,
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                <FaTrash size={14} />
+                {isDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Desktop Table View - Hidden on mobile */}
       <div className="hidden md:block overflow-x-auto">
         <table ref={tableRef} className="w-full border-collapse">
           <thead>
             <tr style={{ backgroundColor: colors.background.subtle }}>
-              <th 
-                scope="col"
-                className="text-left px-4 py-3 font-semibold text-sm border-b"
-                style={{ 
-                  color: colors.text.primary,
-                  borderColor: colors.text.secondary + '20',
-                }}
-              >
-                Check Run ID
-              </th>
+              {onDelete && (
+                <th 
+                  scope="col"
+                  className="text-left px-4 py-3 font-semibold text-sm border-b w-12"
+                  style={{ 
+                    color: colors.text.primary,
+                    borderColor: colors.text.secondary + '20',
+                  }}
+                >
+                  <span className="sr-only">Select</span>
+                </th>
+              )}
+
               <th 
                 scope="col"
                 className="text-left px-4 py-3 font-semibold text-sm border-b"
@@ -174,6 +335,16 @@ export function IssuesTable({ checkRuns, onRowClick }: IssuesTableProps) {
                 }}
               >
                 Platforms
+              </th>
+              <th 
+                scope="col"
+                className="text-left px-4 py-3 font-semibold text-sm border-b"
+                style={{ 
+                  color: colors.text.primary,
+                  borderColor: colors.text.secondary + '20',
+                }}
+              >
+                Branch
               </th>
               <th 
                 scope="col"
@@ -208,18 +379,17 @@ export function IssuesTable({ checkRuns, onRowClick }: IssuesTableProps) {
             </tr>
           </thead>
           <tbody>
-            {checkRuns.map((checkRun) => {
+            {paginatedCheckRuns.map((checkRun) => {
               const severityInfo = severityConfig[checkRun.highestSeverity];
               const isFailed = checkRun.status === 'FAILED';
               const errorMessage = isFailed 
-                ? getCheckRunErrorMessage(checkRun.errorType, checkRun.errorMessage, checkRun.errorDetails)
+                ? getCheckRunErrorMessage(checkRun.errorType || null, checkRun.errorMessage || null, checkRun.errorDetails || null)
                 : null;
               
               return (
                 <tr
                   key={checkRun.id}
-                  onClick={() => onRowClick(checkRun)}
-                  className="cursor-pointer transition-colors border-b hover:bg-opacity-50"
+                  className="transition-colors border-b hover:bg-opacity-50"
                   style={{ 
                     borderColor: colors.text.secondary + '20',
                     backgroundColor: colors.background.main,
@@ -230,25 +400,55 @@ export function IssuesTable({ checkRuns, onRowClick }: IssuesTableProps) {
                   onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = colors.background.main;
                   }}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`View details for check run ${checkRun.id}. Use arrow keys to navigate, Enter or Space to select.`}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onRowClick(checkRun);
-                    }
-                  }}
                 >
-                  <td className="px-4 py-3">
-                    <span 
-                      className="font-mono text-sm"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      {checkRun.id.substring(0, 8)}...
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
+                  {onDelete && (
+                    <td className="px-4 py-3">
+                      <div className="relative flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(checkRun.id)}
+                          onChange={(e) => handleSelectItem(e, checkRun.id)}
+                          className="w-4 h-4 rounded border-2 focus:ring-2 focus:ring-offset-2 appearance-none cursor-pointer transition-all duration-200"
+                          style={{
+                            borderColor: selectedIds.has(checkRun.id) ? colors.primary.accent : colors.text.secondary + '60',
+                            backgroundColor: selectedIds.has(checkRun.id) ? colors.primary.accent : 'transparent',
+                            '--tw-ring-color': colors.primary.accent,
+                          } as React.CSSProperties}
+                          onMouseEnter={(e) => {
+                            if (!selectedIds.has(checkRun.id)) {
+                              e.currentTarget.style.borderColor = colors.primary.accent + '80';
+                              e.currentTarget.style.backgroundColor = colors.primary.accent + '10';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!selectedIds.has(checkRun.id)) {
+                              e.currentTarget.style.borderColor = colors.text.secondary + '60';
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                            }
+                          }}
+                          aria-label={`Select issue for ${checkRun.repositoryName}`}
+                        />
+                        {selectedIds.has(checkRun.id) && (
+                          <svg
+                            className="absolute w-3 h-3 text-white pointer-events-none"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                    </td>
+                  )}
+
+                  <td 
+                    className="px-4 py-3 cursor-pointer"
+                    onClick={() => onRowClick(checkRun)}
+                  >
                     <span 
                       className="font-medium"
                       style={{ color: colors.text.primary }}
@@ -256,17 +456,34 @@ export function IssuesTable({ checkRuns, onRowClick }: IssuesTableProps) {
                       {checkRun.repositoryName}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td 
+                    className="px-4 py-3 cursor-pointer"
+                    onClick={() => onRowClick(checkRun)}
+                  >
                     <span style={{ color: colors.text.secondary }}>
                       {formatPlatforms(checkRun.platforms)}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td 
+                    className="px-4 py-3 cursor-pointer"
+                    onClick={() => onRowClick(checkRun)}
+                  >
+                    <span style={{ color: colors.text.secondary }}>
+                      {checkRun.branchName || 'main'}
+                    </span>
+                  </td>
+                  <td 
+                    className="px-4 py-3 cursor-pointer"
+                    onClick={() => onRowClick(checkRun)}
+                  >
                     <span style={{ color: colors.text.secondary }}>
                       {formatDate(checkRun.checkDate)}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td 
+                    className="px-4 py-3 cursor-pointer"
+                    onClick={() => onRowClick(checkRun)}
+                  >
                     {isFailed && errorMessage ? (
                       <InlineError error={errorMessage} compact />
                     ) : (
@@ -275,7 +492,10 @@ export function IssuesTable({ checkRuns, onRowClick }: IssuesTableProps) {
                       </Badge>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td 
+                    className="px-4 py-3 cursor-pointer"
+                    onClick={() => onRowClick(checkRun)}
+                  >
                     {isFailed ? (
                       <span 
                         className="text-sm"
@@ -301,45 +521,86 @@ export function IssuesTable({ checkRuns, onRowClick }: IssuesTableProps) {
 
       {/* Mobile Card View - Visible only on mobile */}
       <div className="md:hidden space-y-3">
-        {checkRuns.map((checkRun) => {
+        {paginatedCheckRuns.map((checkRun) => {
           const severityInfo = severityConfig[checkRun.highestSeverity];
           const isFailed = checkRun.status === 'FAILED';
           const errorMessage = isFailed 
-            ? getCheckRunErrorMessage(checkRun.errorType, checkRun.errorMessage, checkRun.errorDetails)
+            ? getCheckRunErrorMessage(checkRun.errorType || null, checkRun.errorMessage || null, checkRun.errorDetails || null)
             : null;
           
           return (
-            <button
+            <div
               key={checkRun.id}
-              onClick={() => onRowClick(checkRun)}
-              className="w-full text-left p-4 rounded-lg border transition-all duration-200 active:scale-[0.98] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              className="p-4 rounded-lg border transition-all duration-200 hover:shadow-md"
               style={{
                 borderColor: colors.text.secondary + '40',
                 backgroundColor: colors.background.main,
-                '--tw-ring-color': colors.primary.accent,
-              } as React.CSSProperties}
+              }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.backgroundColor = colors.background.subtle;
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = colors.background.main;
               }}
-              aria-label={`View details for check run ${checkRun.id}`}
             >
               <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="flex-1 min-w-0">
-                  <h3 
-                    className="font-semibold text-base mb-1 truncate"
-                    style={{ color: colors.text.primary }}
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  {onDelete && (
+                    <div className="relative flex items-center justify-center mt-1">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(checkRun.id)}
+                        onChange={(e) => handleSelectItem(e, checkRun.id)}
+                        className="w-4 h-4 rounded border-2 focus:ring-2 focus:ring-offset-2 appearance-none cursor-pointer transition-all duration-200"
+                        style={{
+                          borderColor: selectedIds.has(checkRun.id) ? colors.primary.accent : colors.text.secondary + '60',
+                          backgroundColor: selectedIds.has(checkRun.id) ? colors.primary.accent : 'transparent',
+                          '--tw-ring-color': colors.primary.accent,
+                        } as React.CSSProperties}
+                        onMouseEnter={(e) => {
+                          if (!selectedIds.has(checkRun.id)) {
+                            e.currentTarget.style.borderColor = colors.primary.accent + '80';
+                            e.currentTarget.style.backgroundColor = colors.primary.accent + '10';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!selectedIds.has(checkRun.id)) {
+                            e.currentTarget.style.borderColor = colors.text.secondary + '60';
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }
+                        }}
+                        aria-label={`Select issue for ${checkRun.repositoryName}`}
+                      />
+                      {selectedIds.has(checkRun.id) && (
+                        <svg
+                          className="absolute w-3 h-3 text-white pointer-events-none"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => onRowClick(checkRun)}
+                    className="flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded"
+                    style={{
+                      '--tw-ring-color': colors.primary.accent,
+                    } as React.CSSProperties}
+                    aria-label={`View details for ${checkRun.repositoryName} issues`}
                   >
-                    {checkRun.repositoryName}
-                  </h3>
-                  <p 
-                    className="font-mono text-xs"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {checkRun.id.substring(0, 12)}...
-                  </p>
+                    <h3 
+                      className="font-semibold text-base mb-1 truncate"
+                      style={{ color: colors.text.primary }}
+                    >
+                      {checkRun.repositoryName}
+                    </h3>
+                  </button>
                 </div>
                 {isFailed && errorMessage ? (
                   <InlineError error={errorMessage} compact />
@@ -355,6 +616,12 @@ export function IssuesTable({ checkRuns, onRowClick }: IssuesTableProps) {
                   <span style={{ color: colors.text.secondary }}>Platform:</span>
                   <span style={{ color: colors.text.primary }}>
                     {formatPlatforms(checkRun.platforms)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span style={{ color: colors.text.secondary }}>Branch:</span>
+                  <span style={{ color: colors.text.primary }}>
+                    {checkRun.branchName || 'main'}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -377,10 +644,23 @@ export function IssuesTable({ checkRuns, onRowClick }: IssuesTableProps) {
                   </span>
                 </div>
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center pt-6 border-t" style={{ borderColor: colors.text.secondary + '20' }}>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
+        </div>
+      )}
+
+
     </>
   );
 }

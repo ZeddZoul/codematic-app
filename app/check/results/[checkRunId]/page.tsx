@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -11,7 +11,8 @@ import { colors } from '@/lib/design-system';
 import { getCheckRunErrorMessage } from '@/lib/error-messages';
 import { ErrorDisplay } from '@/components/ui/error-display';
 import { useIsMobile } from '@/lib/hooks/useMediaQuery';
-import { FaChevronLeft, FaCodeBranch } from 'react-icons/fa';
+import { useToast } from '@/lib/hooks/useToast';
+import { FaChevronLeft, FaCodeBranch, FaFileDownload } from 'react-icons/fa';
 
 interface Issue {
   severity: 'high' | 'medium' | 'low';
@@ -25,6 +26,7 @@ interface CheckResults {
   status: string;
   repoName?: string;
   branchName?: string;
+  checkType?: string;
   summary: {
     totalIssues: number;
     highSeverity: number;
@@ -41,41 +43,29 @@ export default function CheckResultsPage() {
   const router = useRouter();
   const params = useParams();
   const isMobile = useIsMobile();
+  const { showToast } = useToast();
   const [results, setResults] = useState<CheckResults | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exportingReport, setExportingReport] = useState(false);
 
   /**
-   * Effect: Load check results from sessionStorage or fetch from API
-   * Purpose: Retrieve stored check results or fetch from database
-   * Dependencies: [params.repoId]
+   * Effect: Load check results from API
+   * Purpose: Fetch check results from database using checkRunId
+   * Dependencies: [params.checkRunId]
    */
   useEffect(() => {
     const loadResults = async () => {
-      // Check if we're in loading state (check is running)
-      const loadingInfo = sessionStorage.getItem('check_loading');
-      if (loadingInfo) {
-        // Keep loading state active
-        return;
-      }
+      if (!params.checkRunId) return;
       
-      // Check for results in sessionStorage first
-      const storedResults = sessionStorage.getItem('check_results');
-      if (storedResults) {
-        setResults(JSON.parse(storedResults));
-        sessionStorage.removeItem('check_results'); // Clean up
-        setLoading(false);
-        return;
-      }
-      
-      // If no sessionStorage, try to fetch from API using the ID as checkRunId
       try {
-        const response = await fetch(`/api/v1/checks/${params.repoId}`);
+        const response = await fetch(`/api/v1/checks/${params.checkRunId}`);
         if (response.ok) {
           const data = await response.json();
           setResults({
             status: data.status,
             repoName: `${data.owner}/${data.repo}`,
             branchName: data.branchName,
+            checkType: data.checkType,
             summary: {
               totalIssues: data.issues?.length || 0,
               highSeverity: data.issues?.filter((i: any) => i.severity === 'high').length || 0,
@@ -87,6 +77,8 @@ export default function CheckResultsPage() {
             errorMessage: data.errorMessage,
             errorDetails: data.errorDetails,
           });
+        } else {
+          console.error('Failed to fetch check results:', response.status);
         }
       } catch (error) {
         console.error('Failed to fetch check results:', error);
@@ -96,7 +88,7 @@ export default function CheckResultsPage() {
     };
     
     loadResults();
-  }, [params.repoId]);
+  }, [params.checkRunId]);
 
   // Group issues by severity - memoized to avoid re-filtering on every render
   const groupedIssues = useMemo(() => ({
@@ -105,16 +97,70 @@ export default function CheckResultsPage() {
     low: results?.issues.filter(issue => issue.severity === 'low') || [],
   }), [results?.issues]);
 
+  // Handle export report functionality
+  const handleExportReport = useCallback(async () => {
+    if (!results || !results.repoName || !params.checkRunId) return;
+
+    setExportingReport(true);
+    
+    try {
+      const response = await fetch('/api/v1/reports/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          checkRunId: params.checkRunId,
+          repoName: results.repoName,
+          branchName: results.branchName,
+          checkType: results.checkType,
+          summary: results.summary,
+          issues: results.issues,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate report');
+      }
+
+      // Get the markdown content
+      const reportData = await response.json();
+      
+      // Create filename following the convention: themis-report-[repo-name]-[YYYY-MM-DD].md
+      const today = new Date().toISOString().split('T')[0];
+      const repoNameClean = results.repoName.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase();
+      const filename = `themis-report-${repoNameClean}-${today}.md`;
+      
+      // Create and download the file
+      const blob = new Blob([reportData.markdown], { type: 'text/markdown;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast({
+        type: 'success',
+        message: 'Report exported successfully!',
+      });
+    } catch (error) {
+      console.error('Export failed:', error);
+      showToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to export report',
+      });
+    } finally {
+      setExportingReport(false);
+    }
+  }, [results, params.checkRunId, showToast]);
+
   if (loading) {
     return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center bg-white z-50">
+      <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="lg" />
-        <p className="mt-4 text-lg font-medium" style={{ color: colors.text.secondary }}>
-          Running compliance check...
-        </p>
-        <p className="mt-2 text-sm" style={{ color: colors.text.secondary }}>
-          This may take a few moments
-        </p>
       </div>
     );
   }
@@ -160,12 +206,81 @@ export default function CheckResultsPage() {
     );
   }
 
-  const repoName = results?.repoName || `Repository ${params.repoId}`;
+  const repoName = results?.repoName || `Repository ${params.checkRunId}`;
 
   return (
-    <div>
+    <div className="relative">
+      {/* Export Loading Overlay */}
+      {exportingReport && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center z-50"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}
+        >
+          <div 
+            className="rounded-xl p-8 max-w-md mx-4 text-center shadow-2xl border"
+            style={{ 
+              backgroundColor: colors.background.main,
+              borderColor: colors.text.secondary + '20'
+            }}
+          >
+            <div className="flex justify-center mb-6">
+              <div className="relative">
+                <div 
+                  className="w-16 h-16 rounded-full border-4 border-t-transparent animate-spin"
+                  style={{ 
+                    borderColor: colors.primary.accent + '20',
+                    borderTopColor: colors.primary.accent
+                  }}
+                />
+                <div 
+                  className="absolute inset-0 w-16 h-16 rounded-full border-4 border-transparent border-t-current animate-pulse"
+                  style={{ color: colors.primary.accent }}
+                />
+              </div>
+            </div>
+            <h3 
+              className="text-xl font-semibold mb-2"
+              style={{ color: colors.text.primary }}
+            >
+              Generating Report
+            </h3>
+            <p 
+              className="text-base mb-4"
+              style={{ color: colors.text.secondary }}
+            >
+              Themis is preparing your comprehensive compliance report...
+            </p>
+            <div className="flex justify-center">
+              <div className="flex space-x-1">
+                <div 
+                  className="w-2 h-2 rounded-full animate-bounce"
+                  style={{ 
+                    backgroundColor: colors.primary.accent,
+                    animationDelay: '0ms'
+                  }}
+                />
+                <div 
+                  className="w-2 h-2 rounded-full animate-bounce"
+                  style={{ 
+                    backgroundColor: colors.primary.accent,
+                    animationDelay: '150ms'
+                  }}
+                />
+                <div 
+                  className="w-2 h-2 rounded-full animate-bounce"
+                  style={{ 
+                    backgroundColor: colors.primary.accent,
+                    animationDelay: '300ms'
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Page Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <div>
           <h1 
             className="text-2xl sm:text-3xl font-bold"
@@ -180,20 +295,40 @@ export default function CheckResultsPage() {
             </p>
           )}
         </div>
-        <Button 
-          variant="secondary" 
-          onClick={() => router.back()}
-          className="flex items-center gap-2"
-        >
-          {isMobile ? (
-            <FaChevronLeft size={16} />
-          ) : (
-            <>
-              <FaChevronLeft size={14} />
-              <span>Back</span>
-            </>
+        
+        <div className="flex items-center gap-3">
+          {/* Export Report Button - Only show if check succeeded */}
+          {results.status !== 'FAILED' && (
+            <Button 
+              onClick={handleExportReport}
+              disabled={exportingReport}
+              className="flex items-center gap-2"
+              style={{
+                backgroundColor: colors.primary.accent,
+                color: 'white',
+                opacity: exportingReport ? 0.6 : 1,
+              }}
+            >
+              <FaFileDownload size={14} />
+              <span>{isMobile ? 'Export' : 'Export Report'}</span>
+            </Button>
           )}
-        </Button>
+          
+          <Button 
+            variant="secondary" 
+            onClick={() => router.back()}
+            className="flex items-center gap-2"
+          >
+            {isMobile ? (
+              <FaChevronLeft size={16} />
+            ) : (
+              <>
+                <FaChevronLeft size={14} />
+                <span>Back</span>
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Error Display - Show if check failed */}
@@ -203,7 +338,7 @@ export default function CheckResultsPage() {
             error={getCheckRunErrorMessage(
               results.errorType,
               results.errorMessage,
-              results.errorDetails
+              results.errorDetails || null
             )!}
           />
         </div>

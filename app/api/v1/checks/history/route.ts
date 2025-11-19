@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 
-type Platform = 'APPLE_APP_STORE' | 'GOOGLE_PLAY_STORE';
+type Platform = 'APPLE_APP_STORE' | 'GOOGLE_PLAY_STORE' | 'CHROME_WEB_STORE' | 'MOBILE_PLATFORMS';
 type Severity = 'high' | 'medium' | 'low' | 'none';
 
 interface CheckRun {
@@ -71,12 +71,12 @@ export async function GET(request: Request) {
         
         // Extract platforms from checkType
         let platforms: Platform[] = [];
-        if (checkRun.checkType === 'BOTH') {
+        if (checkRun.checkType === 'MOBILE_PLATFORMS') {
           platforms = ['APPLE_APP_STORE', 'GOOGLE_PLAY_STORE'];
-        } else if (checkRun.checkType === 'APPLE_APP_STORE' || checkRun.checkType === 'GOOGLE_PLAY_STORE') {
+        } else if (checkRun.checkType === 'APPLE_APP_STORE' || checkRun.checkType === 'GOOGLE_PLAY_STORE' || checkRun.checkType === 'CHROME_WEB_STORE') {
           platforms = [checkRun.checkType as Platform];
         } else {
-          // Default to both if unknown
+          // Default to mobile platforms if unknown
           platforms = ['APPLE_APP_STORE', 'GOOGLE_PLAY_STORE'];
         }
 

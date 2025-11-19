@@ -2,9 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { colors } from '@/lib/design-system';
-import { FaChevronDown, FaApple, FaAndroid, FaLayerGroup } from 'react-icons/fa';
+import { FaChevronDown, FaApple, FaAndroid, FaLayerGroup, FaChrome } from 'react-icons/fa';
 
-export type Platform = 'APPLE_APP_STORE' | 'GOOGLE_PLAY_STORE' | 'BOTH';
+export type Platform = 'APPLE_APP_STORE' | 'GOOGLE_PLAY_STORE' | 'CHROME_WEB_STORE' | 'MOBILE_PLATFORMS';
 
 interface PlatformSelectorProps {
   value: Platform;
@@ -15,7 +15,8 @@ interface PlatformSelectorProps {
 const platformOptions: { value: Platform; label: string; icon: typeof FaApple }[] = [
   { value: 'APPLE_APP_STORE', label: 'Apple App Store', icon: FaApple },
   { value: 'GOOGLE_PLAY_STORE', label: 'Google Play Store', icon: FaAndroid },
-  { value: 'BOTH', label: 'Both Platforms', icon: FaLayerGroup },
+  { value: 'CHROME_WEB_STORE', label: 'Chrome Web Store', icon: FaChrome },
+  { value: 'MOBILE_PLATFORMS', label: 'Mobile Platforms', icon: FaLayerGroup },
 ];
 
 export function PlatformSelector({ value, onChange, disabled = false }: PlatformSelectorProps) {
@@ -23,7 +24,7 @@ export function PlatformSelector({ value, onChange, disabled = false }: Platform
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const selectedOption = platformOptions.find(opt => opt.value === value) || platformOptions[2];
+  const selectedOption = platformOptions.find(opt => opt.value === value) || platformOptions[3];
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

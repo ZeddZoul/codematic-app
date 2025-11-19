@@ -89,7 +89,7 @@ export function Sidebar() {
         borderColor: colors.text.secondary + '20',
         width: sidebarWidth,
         transition: 'width 200ms ease-in-out',
-        zIndex: 1000,
+        zIndex: 1100,
       }}
     >
       {/* Logo/Brand */}

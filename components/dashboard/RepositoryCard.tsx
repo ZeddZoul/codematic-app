@@ -9,6 +9,7 @@ import { DynamicIcon } from '@/lib/icons';
 import { FaCheckCircle, FaExclamationTriangle, FaExclamationCircle, FaClock, FaCodeBranch } from 'react-icons/fa';
 import { PlatformSelector, Platform } from '@/components/ui/platform-selector';
 import { BranchSelector, Branch } from '@/components/ui/branch-selector';
+import { RunCheckButton } from '@/components/ui/run-check-button';
 
 type RepositoryStatus = 'success' | 'warning' | 'error' | 'none' | 'failed';
 
@@ -25,6 +26,12 @@ interface RepositoryCardProps {
   errorDetails?: string | null;
   onClick: () => void;
   onStartCheck: (platform: Platform, branch: string) => void;
+  isCheckRunning?: boolean;
+  branches?: Array<{
+    name: string;
+    protected: boolean;
+  }>;
+  defaultBranch?: string;
 }
 
 const statusConfig = {
@@ -72,14 +79,16 @@ export const RepositoryCard = React.memo<RepositoryCardProps>(function Repositor
   errorDetails,
   onClick,
   onStartCheck,
+  isCheckRunning = false,
+  branches = [],
+  defaultBranch,
 }) {
   const [isHovered, setIsHovered] = React.useState(false);
-  const [isButtonHovered, setIsButtonHovered] = React.useState(false);
-  const [selectedPlatform, setSelectedPlatform] = React.useState<Platform>('BOTH');
-  const [selectedBranch, setSelectedBranch] = React.useState<string>('');
-  const [branches, setBranches] = React.useState<Branch[]>([]);
-  const [branchesLoading, setBranchesLoading] = React.useState(true);
-  const [isChecking, setIsChecking] = React.useState(false);
+  const [selectedPlatform, setSelectedPlatform] = React.useState<Platform>('MOBILE_PLATFORMS');
+  const [selectedBranch, setSelectedBranch] = React.useState<string>(defaultBranch || 'main');
+  const [fetchedBranches, setFetchedBranches] = React.useState<Branch[]>([]);
+  const [branchesLoading, setBranchesLoading] = React.useState(false);
+  const [branchesLoaded, setBranchesLoaded] = React.useState(false);
   
   const config = statusConfig[status];
   const isFailed = status === 'failed';
@@ -87,43 +96,48 @@ export const RepositoryCard = React.memo<RepositoryCardProps>(function Repositor
     ? getCheckRunErrorMessage(errorType || null, errorMessage || null, errorDetails || null)
     : null;
 
-  // Fetch branches on mount
-  React.useEffect(() => {
-    const fetchBranches = async () => {
-      try {
-        const [owner, repo] = fullName.split('/');
-        const response = await fetch(`/api/v1/branches/${owner}/${repo}`);
-        if (response.ok) {
-          const data = await response.json();
-          setBranches(data.branches || []);
-          setSelectedBranch(data.defaultBranch || 'main');
-        } else {
-          // Fallback to main if API fails
-          console.warn(`Failed to fetch branches for ${fullName}, using default`);
-          setBranches([{ name: 'main', protected: false }]);
-          setSelectedBranch('main');
-        }
-      } catch (error) {
-        console.error('Failed to fetch branches:', error);
-        // Fallback to main
-        setBranches([{ name: 'main', protected: false }]);
-        setSelectedBranch('main');
-      } finally {
-        setBranchesLoading(false);
-      }
-    };
-
-    fetchBranches();
-  }, [fullName]);
-
-  const handleStartCheck = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsChecking(true);
+  // Lazy load branches when needed
+  const loadBranches = React.useCallback(async () => {
+    if (branchesLoaded || branchesLoading) return;
+    
+    setBranchesLoading(true);
     try {
-      await onStartCheck(selectedPlatform, selectedBranch);
+      const [owner, repo] = fullName.split('/');
+      const response = await fetch(`/api/v1/branches/${owner}/${repo}`);
+      if (response.ok) {
+        const data = await response.json();
+        setFetchedBranches(data.branches || []);
+        setBranchesLoaded(true);
+      } else {
+        // Fallback to default branch only
+        setFetchedBranches([{ name: defaultBranch || 'main', protected: false }]);
+        setBranchesLoaded(true);
+      }
+    } catch (error) {
+      console.error('Failed to fetch branches:', error);
+      // Fallback to default branch only
+      setFetchedBranches([{ name: defaultBranch || 'main', protected: false }]);
+      setBranchesLoaded(true);
     } finally {
-      setIsChecking(false);
+      setBranchesLoading(false);
     }
+  }, [fullName, defaultBranch, branchesLoaded, branchesLoading]);
+
+  // Use provided branches or fetched branches, fallback to default
+  const availableBranches = React.useMemo(() => {
+    if (branches && branches.length > 0) {
+      return branches;
+    }
+    if (fetchedBranches.length > 0) {
+      return fetchedBranches;
+    }
+    // Fallback to default branch
+    return [{ name: defaultBranch || 'main', protected: false }];
+  }, [branches, fetchedBranches, defaultBranch]);
+
+  const handleStartCheck = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onStartCheck(selectedPlatform, selectedBranch);
   };
 
   const formatDate = React.useCallback((date: Date) => {
@@ -147,11 +161,21 @@ export const RepositoryCard = React.memo<RepositoryCardProps>(function Repositor
     <div
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="bg-white rounded-lg border p-4 sm:p-6 transition-all duration-200 w-full"
+      className={`bg-white rounded-lg border p-4 sm:p-6 transition-all duration-200 w-full ${isCheckRunning ? 'ring-2 ring-opacity-50' : ''}`}
       style={{
-        borderColor: isHovered ? colors.primary.accent : colors.text.secondary + '30',
+        borderColor: isCheckRunning 
+          ? colors.primary.accent 
+          : isHovered 
+            ? colors.primary.accent 
+            : colors.text.secondary + '30',
         backgroundColor: colors.background.main,
-        boxShadow: isHovered ? '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' : 'none',
+        boxShadow: isCheckRunning
+          ? `0 8px 25px -5px ${colors.primary.accent}20, 0 4px 10px -2px ${colors.primary.accent}10`
+          : isHovered 
+            ? '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' 
+            : 'none',
+
+
       }}
     >
       {/* Clickable header area */}
@@ -211,11 +235,12 @@ export const RepositoryCard = React.memo<RepositoryCardProps>(function Repositor
         </div>
         <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           <BranchSelector
-            branches={branches}
+            branches={availableBranches}
             value={selectedBranch}
             onChange={setSelectedBranch}
-            disabled={isChecking}
+            disabled={isCheckRunning}
             loading={branchesLoading}
+            onOpen={loadBranches}
           />
         </div>
       </div>
@@ -249,31 +274,15 @@ export const RepositoryCard = React.memo<RepositoryCardProps>(function Repositor
           <PlatformSelector
             value={selectedPlatform}
             onChange={setSelectedPlatform}
-            disabled={isChecking}
+            disabled={isCheckRunning}
           />
         </div>
         
-        <button
+        <RunCheckButton
           onClick={handleStartCheck}
-          disabled={isChecking}
-          onMouseEnter={() => setIsButtonHovered(true)}
-          onMouseLeave={() => setIsButtonHovered(false)}
-          className="w-full rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 min-h-[44px] font-medium"
-          style={{
-            backgroundColor: isButtonHovered && !isChecking 
-              ? colors.primary.accent 
-              : colors.primary.accent + '10',
-            color: isButtonHovered && !isChecking 
-              ? 'white' 
-              : colors.primary.accent,
-            '--tw-ring-color': colors.primary.accent,
-            cursor: isChecking ? 'not-allowed' : 'pointer',
-            opacity: isChecking ? 0.6 : 1,
-          } as React.CSSProperties}
-          aria-label={isChecking ? 'Starting compliance check' : 'Start compliance check'}
-        >
-          {isChecking ? 'Starting Check...' : 'Start Check'}
-        </button>
+          disabled={isCheckRunning}
+          isLoading={isCheckRunning}
+        />
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import { RepositoryCard } from '@/components/dashboard/RepositoryCard';
 import { Pagination } from '@/components/ui/pagination';
 import { SkeletonLoader } from '@/components/ui/loading-spinner';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
+import { SimpleLoading } from '@/components/ui/simple-loading';
 import { colors } from '@/lib/design-system';
 import { useToast } from '@/lib/hooks/useToast';
 import { useRepositories, Repository } from '@/lib/hooks/useRepositories';
@@ -40,6 +41,10 @@ export default function RepositoriesPage() {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [isCheckLoading, setIsCheckLoading] = useState(false);
+  const [loadingRepo, setLoadingRepo] = useState<string>('');
+  const [checkRunId, setCheckRunId] = useState<string>('');
+  const [isNavigating, setIsNavigating] = useState(false);
 
   // Build filters for TanStack Query
   const filters = useMemo(() => ({
@@ -88,20 +93,14 @@ export default function RepositoriesPage() {
   // Handle repository click - navigate to check history for that repo
   const handleRepositoryClick = useCallback((repo: Repository) => {
     const [owner, repoName] = repo.full_name.split('/');
-    router.push(`/checks/${owner}/${repoName}`);
+    router.push(`/dashboard/checks/${owner}/${repoName}`);
   }, [router]);
 
-  // Handle start check - initiate compliance check and navigate to results
+  // Handle start check - show overlay loading then navigate to results
   const handleStartCheck = useCallback(async (repo: Repository, platform: string, branch: string) => {
     try {
-      // Store repo info for loading screen
-      sessionStorage.setItem('check_loading', JSON.stringify({
-        repoId: repo.id,
-        repoName: repo.full_name,
-      }));
-      
-      // Navigate to check page with loading state
-      router.push(`/check/${repo.id}`);
+      setIsCheckLoading(true);
+      setLoadingRepo(repo.full_name);
 
       const response = await fetch('/api/v1/checks', {
         method: 'POST',
@@ -120,36 +119,40 @@ export default function RepositoriesPage() {
 
       const data = await response.json();
       
-      // Store results for the check page
-      sessionStorage.setItem('check_results', JSON.stringify({
-        ...data,
-        repoName: repo.full_name,
-      }));
-      
-      // Remove loading flag
-      sessionStorage.removeItem('check_loading');
+      // Set the checkRunId to enable real-time progress tracking
+      setCheckRunId(data.checkRunId);
       
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: queryKeys.repositories.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.stats.dashboard });
       queryClient.invalidateQueries({ queryKey: queryKeys.checks.all });
       
-      // Force a re-render of the check page by navigating again
-      router.replace(`/check/${repo.id}`);
     } catch (error) {
       console.error('Check failed:', error);
-      sessionStorage.removeItem('check_loading');
       showToast({
         type: 'error',
         message: error instanceof Error ? error.message : 'Failed to start compliance check',
       });
-      // Navigate back to repos on error
-      router.push('/dashboard/repos');
+    } finally {
+      // Don't clear loading state here - let the EnhancedLoading component handle it
+      // setIsCheckLoading(false);
+      // setLoadingRepo('');
     }
-  }, [router, showToast, queryClient]);
+  }, [showToast, queryClient]);
+
+  // Handle completion from loading component
+  const handleLoadingComplete = useCallback(() => {
+    if (checkRunId) {
+      // Set navigating flag to prevent overlay from disappearing
+      setIsNavigating(true);
+      // Replace current page - loading state shouldn't be in browser history
+      router.replace(`/check/results/${checkRunId}`);
+    }
+    // Don't reset loading state here - let the page unmount handle cleanup
+  }, [checkRunId, router]);
 
   return (
-    <div className="min-h-screen">
+    <div className="h-screen relative overflow-auto">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-4 sm:mb-6">
@@ -266,6 +269,9 @@ export default function RepositoriesPage() {
                   errorDetails={repo.errorDetails}
                   onClick={() => handleRepositoryClick(repo)}
                   onStartCheck={(platform, branch) => handleStartCheck(repo, platform, branch)}
+                  isCheckRunning={isCheckLoading && loadingRepo === repo.full_name}
+                  branches={repo.branches}
+                  defaultBranch={repo.default_branch}
                 />
               ))}
             </div>
@@ -291,6 +297,17 @@ export default function RepositoriesPage() {
           </>
         )}
       </div>
+      
+      {/* Loading Overlay */}
+      {(isCheckLoading || isNavigating) && (
+        <SimpleLoading
+          checkRunId={checkRunId}
+          enableRealTimeSync={true}
+          onComplete={handleLoadingComplete}
+          title="Running Compliance Check"
+          subtitle={`Analyzing ${loadingRepo}`}
+        />
+      )}
     </div>
   );
 }

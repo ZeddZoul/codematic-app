@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys, CheckFilters } from '@/lib/query-keys';
 
-type Platform = 'APPLE_APP_STORE' | 'GOOGLE_PLAY_STORE';
+type Platform = 'APPLE_APP_STORE' | 'GOOGLE_PLAY_STORE' | 'CHROME_WEB_STORE' | 'MOBILE_PLATFORMS';
 type Severity = 'high' | 'medium' | 'low' | 'none';
 
 export interface CheckRun {
@@ -43,7 +43,7 @@ async function fetchCheckHistory(filters?: CheckFilters): Promise<CheckHistoryRe
 
 /**
  * Hook for fetching check history with optional polling
- * Uses shorter stale time (30 seconds) for more frequent updates
+ * Uses very short stale time (5 seconds) for better optimistic updates
  * 
  * @param filters - Filters for check history
  * @param enablePolling - Enable automatic polling every 30 seconds
@@ -52,7 +52,10 @@ export function useCheckHistory(filters?: CheckFilters, enablePolling = false) {
   return useQuery({
     queryKey: queryKeys.checks.history(filters),
     queryFn: () => fetchCheckHistory(filters),
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: 5 * 1000, // 5 seconds for better optimistic updates
+    gcTime: 10 * 1000, // 10 seconds garbage collection time
     refetchInterval: enablePolling ? 30 * 1000 : false,
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Always refetch on mount
   });
 }

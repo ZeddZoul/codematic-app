@@ -7,6 +7,8 @@ import { colors } from '@/lib/design-system';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { DynamicIcon, IconName } from '@/lib/icons';
+import { FaTimes } from 'react-icons/fa';
+import { MdLogout } from 'react-icons/md';
 
 interface NavItem {
   label: string;
@@ -149,7 +151,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
             }}
           >
             <DynamicIcon
-              icon="close"
+              icon={FaTimes}
               state="inactive"
               size={24}
               ariaLabel="Close menu"
@@ -227,7 +229,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
             className="w-full flex items-center justify-center gap-2"
           >
             <DynamicIcon
-              icon="logout"
+              icon={MdLogout}
               state="white"
               size={20}
               decorative

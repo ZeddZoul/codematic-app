@@ -52,10 +52,8 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
 
   const pageName = getPageName(pathname);
 
-  // Only render on mobile viewports
-  if (!isMobile) {
-    return null;
-  }
+  // Don't render - let CSS handle visibility with lg:hidden
+  // This ensures it shows whenever sidebar is hidden (below 1024px)
 
   return (
     <header 

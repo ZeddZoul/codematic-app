@@ -73,7 +73,8 @@ export function IssueFilters({ filters, onFilterChange, repositories = [] }: Iss
           <option value="all">All Platforms</option>
           <option value="APPLE_APP_STORE">Apple App Store</option>
           <option value="GOOGLE_PLAY_STORE">Google Play Store</option>
-          <option value="BOTH">Both Stores</option>
+          <option value="CHROME_WEB_STORE">Chrome Web Store</option>
+          <option value="MOBILE_PLATFORMS">Mobile Platforms</option>
         </select>
       </div>
 

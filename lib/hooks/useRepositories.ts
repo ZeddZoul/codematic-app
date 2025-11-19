@@ -20,6 +20,11 @@ export interface Repository {
   errorType?: string | null;
   errorMessage?: string | null;
   errorDetails?: string | null;
+  default_branch: string; // This comes from GitHub API
+  branches?: Array<{
+    name: string;
+    protected: boolean;
+  }>;
 }
 
 export interface RepositoriesResponse {

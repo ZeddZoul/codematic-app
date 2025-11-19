@@ -1,4 +1,4 @@
-import { ComplianceError, ComplianceErrorType } from './compliance';
+import { ComplianceError, ComplianceErrorType } from './types';
 
 /**
  * User-friendly error message with actionable guidance

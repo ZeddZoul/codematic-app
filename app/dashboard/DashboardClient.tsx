@@ -9,7 +9,7 @@ import { useToast } from '@/lib/hooks/useToast';
 import { useUser } from '@/lib/hooks/useUser';
 import { useDashboardStats } from '@/lib/hooks/useDashboardStats';
 import { DynamicIcon } from '@/lib/icons';
-import { MdDashboard } from 'react-icons/md';
+import { MdDashboard, MdWarning } from 'react-icons/md';
 import { FaCodeBranch } from 'react-icons/fa';
 import { AiOutlineIssuesClose } from 'react-icons/ai';
 import { GiCheckedShield } from 'react-icons/gi';

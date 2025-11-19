@@ -15,9 +15,10 @@ interface BranchSelectorProps {
   onChange: (branch: string) => void;
   disabled?: boolean;
   loading?: boolean;
+  onOpen?: () => void;
 }
 
-export function BranchSelector({ branches, value, onChange, disabled = false, loading = false }: BranchSelectorProps) {
+export function BranchSelector({ branches, value, onChange, disabled = false, loading = false, onOpen }: BranchSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -48,14 +49,7 @@ export function BranchSelector({ branches, value, onChange, disabled = false, lo
     };
   }, [isOpen]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-sm" style={{ color: colors.text.secondary }}>
-        <FaCodeBranch size={14} />
-        <span>Loading...</span>
-      </div>
-    );
-  }
+  // Don't show loading state here - handle it in the dropdown instead
 
   return (
     <div ref={dropdownRef} className="relative">
@@ -65,6 +59,9 @@ export function BranchSelector({ branches, value, onChange, disabled = false, lo
         onClick={(e) => {
           e.stopPropagation();
           if (!disabled) {
+            if (!isOpen) {
+              onOpen?.(); // Call onOpen when opening dropdown
+            }
             setIsOpen(!isOpen);
           }
         }}
@@ -81,7 +78,7 @@ export function BranchSelector({ branches, value, onChange, disabled = false, lo
         aria-haspopup="listbox"
       >
         <FaCodeBranch size={14} />
-        <span className="font-medium">{selectedBranch?.name || 'main'}</span>
+        <span className="font-medium">{selectedBranch?.name || value}</span>
         <FaChevronDown
           size={10}
           style={{
@@ -105,8 +102,29 @@ export function BranchSelector({ branches, value, onChange, disabled = false, lo
           }}
           role="listbox"
         >
-          {branches.map((branch) => (
-            <button
+          {loading ? (
+            // Show skeleton items while loading
+            Array.from({ length: 3 }).map((_, index) => (
+              <div
+                key={`skeleton-${index}`}
+                className="w-full px-3 py-2 flex items-center gap-2 animate-pulse"
+              >
+                <div 
+                  className="w-3 h-3 rounded-sm"
+                  style={{ backgroundColor: colors.text.secondary + '20' }}
+                />
+                <div 
+                  className="h-4 rounded flex-1"
+                  style={{ 
+                    backgroundColor: colors.text.secondary + '20',
+                    width: index === 0 ? '60%' : index === 1 ? '80%' : '70%'
+                  }}
+                />
+              </div>
+            ))
+          ) : (
+            branches.map((branch) => (
+              <button
               key={branch.name}
               type="button"
               onClick={(e) => {
@@ -148,8 +166,9 @@ export function BranchSelector({ branches, value, onChange, disabled = false, lo
                   Protected
                 </span>
               )}
-            </button>
-          ))}
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>

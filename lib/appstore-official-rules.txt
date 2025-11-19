@@ -447,3 +447,8 @@ Bug Fix Submissions: For apps that are already on the App Store or alternative d
 We’re excited to see what you come up with next!
 
 Last Updated: November 13, 2025
+-----------------
+END
+I added appstore official rule.. It contains the apstores rules, categories an sub categories.
+
+I want it so that for appstore checks and mobile platform checks, we highlight the particular category violated and even the sub section
