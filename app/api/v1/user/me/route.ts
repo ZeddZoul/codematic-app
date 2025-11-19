@@ -8,5 +8,11 @@ export async function GET() {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  return NextResponse.json(session.user);
+  // Cache user data for 5 minutes
+  // User data changes infrequently, so longer cache is safe
+  return NextResponse.json(session.user, {
+    headers: {
+      'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
+    },
+  });
 }

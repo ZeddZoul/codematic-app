@@ -1,16 +1,21 @@
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { colors } from '@/lib/design-system';
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: colors.background.subtle }}>
       <div className="text-center">
-        <h2 className="text-6xl font-bold text-gray-900 mb-4">404</h2>
-        <p className="text-xl text-gray-600 mb-8">Page not found</p>
-        <Link
-          href="/"
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-        >
-          Go Home
+        <h2 className="text-6xl font-bold mb-4" style={{ color: colors.text.primary }}>
+          404
+        </h2>
+        <p className="text-xl mb-8" style={{ color: colors.text.secondary }}>
+          Page not found
+        </p>
+        <Link href="/">
+          <Button variant="primary">
+            Go Home
+          </Button>
         </Link>
       </div>
     </div>

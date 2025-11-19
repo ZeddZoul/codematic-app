@@ -1,4 +1,5 @@
 import React from 'react';
+import { colors } from '@/lib/design-system';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger';
@@ -6,17 +7,41 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export function Button({ variant = 'primary', children, className = '', ...props }: ButtonProps) {
-  const baseStyles = 'px-4 py-2 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseStyles = 'px-4 py-2 min-h-[44px] rounded-lg font-semibold transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2';
   
   const variants = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700',
-    secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300',
+    primary: 'text-white',
+    secondary: '',
     danger: 'bg-red-600 text-white hover:bg-red-700',
+  };
+
+  const getStyles = () => {
+    if (variant === 'primary') {
+      return {
+        backgroundColor: colors.primary.accent,
+        '--hover-bg': colors.primary.accentHover,
+        '--active-bg': colors.primary.accentActive,
+        '--tw-ring-color': colors.primary.accent,
+      } as React.CSSProperties;
+    } else if (variant === 'secondary') {
+      return {
+        backgroundColor: colors.background.subtle,
+        color: colors.text.secondary,
+        '--hover-bg': '#E5E7EB',
+        '--tw-ring-color': colors.text.secondary,
+      } as React.CSSProperties;
+    } else if (variant === 'danger') {
+      return {
+        '--tw-ring-color': '#EF4444',
+      } as React.CSSProperties;
+    }
+    return {};
   };
 
   return (
     <button
-      className={`${baseStyles} ${variants[variant]} ${className}`}
+      className={`${baseStyles} ${variants[variant]} ${className} hover:[background-color:var(--hover-bg)] active:[background-color:var(--active-bg)]`}
+      style={getStyles()}
       {...props}
     >
       {children}

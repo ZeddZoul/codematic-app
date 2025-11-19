@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { colors } from '@/lib/design-system';
 
 export default function Error({
   error,
@@ -9,20 +11,20 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // Log error to console when error changes
   useEffect(() => {
     console.error(error);
   }, [error]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: colors.background.subtle }}>
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Something went wrong!</h2>
-        <button
-          onClick={() => reset()}
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-        >
+        <h2 className="text-2xl font-bold mb-4" style={{ color: colors.text.primary }}>
+          Something went wrong!
+        </h2>
+        <Button onClick={() => reset()} variant="primary">
           Try again
-        </button>
+        </Button>
       </div>
     </div>
   );
