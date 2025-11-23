@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   
   const redirectUri = `${baseUrl}/api/v1/auth/github/callback`;
   
-  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}`;
+  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&prompt=consent&t=${Date.now()}`;
   
   return NextResponse.redirect(githubAuthUrl);
 }
