@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     const tokenData = await tokenResponse.json();
 
     if (tokenData.error) {
-      return NextResponse.redirect(new URL('/login?error=token_error', request.url));
+      return NextResponse.redirect(`${baseUrl}/login?error=token_error`);
     }
 
     // Get user info from GitHub
@@ -78,10 +78,10 @@ export async function GET(request: NextRequest) {
       const octokit = getGithubClient();
       await octokit.request('GET /installation/repositories');
       // App is installed, go to dashboard
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      return NextResponse.redirect(`${baseUrl}/dashboard`);
     } catch (error) {
       // App not installed, redirect to installation page
-      return NextResponse.redirect(new URL('/install-app', request.url));
+      return NextResponse.redirect(`${baseUrl}/install-app`);
     }
   } catch (error) {
     console.error('GitHub auth failed:', error);
