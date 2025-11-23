@@ -67,4 +67,4 @@ ENV PORT=8080
 ENV HOSTNAME="0.0.0.0"
 
 # Generate Prisma client at runtime if needed and start the server
-CMD ["sh", "-c", "npx prisma generate 2>/dev/null || echo 'Prisma client already exists' && node server.js"]
+CMD ["sh", "-c", "npx prisma generate 2>/dev/null || echo 'Prisma client already exists' && npx prisma migrate deploy && node server.js"]
