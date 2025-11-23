@@ -79,10 +79,23 @@ export async function GET(request: NextRequest) {
       const octokit = getGithubClient(tokenData.access_token);
       const { data } = await octokit.request('GET /user/installations');
       
+      console.log('Debug Installation Check:', {
+        envAppId: process.env.GITHUB_APP_ID,
+        totalCount: data.total_count,
+        installationsFound: data.installations.map((i: any) => ({
+          id: i.id,
+          app_id: i.app_id,
+          app_slug: i.app_slug,
+          account: i.account.login
+        }))
+      });
+
       // Check if any of the installations match our App ID
       const hasAppInstallation = data.installations.some(
         (inst: any) => String(inst.app_id) === String(process.env.GITHUB_APP_ID)
       );
+      
+      console.log('Installation Check Result:', { hasAppInstallation });
       
       // If the user has an installation of OUR app, they are "installed"
       if (hasAppInstallation) {
