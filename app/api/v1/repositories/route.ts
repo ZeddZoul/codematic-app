@@ -45,8 +45,24 @@ export async function GET(request: Request) {
     let installationId: string | undefined;
     
     try {
+      let username = session.user?.githubId || '';
+      
+      // Try to resolve numeric ID to username
+      if (username && /^\d+$/.test(username)) {
+        try {
+          const { data: githubUser } = await appOctokit.request('GET /user/{id}', {
+            id: username
+          });
+          if (githubUser && githubUser.login) {
+            username = githubUser.login;
+          }
+        } catch (e) {
+          console.log('Could not resolve username from ID, trying ID as username');
+        }
+      }
+
       const { data: installation } = await appOctokit.request('GET /users/{username}/installation', {
-        username: session.user?.githubId || '',
+        username: username,
       });
       
       if (installation && installation.id) {

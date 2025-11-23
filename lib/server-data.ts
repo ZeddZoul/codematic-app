@@ -49,8 +49,24 @@ async function fetchDashboardStatsInternal(userId: string): Promise<DashboardSta
       });
 
       if (user?.githubId) {
+        // user.githubId is the numeric ID (e.g. "12345")
+        // We need the username (handle) to check installation
+        let username = user.githubId;
+        
+        try {
+          // Try to fetch user details to get the login handle
+          const { data: githubUser } = await appOctokit.request('GET /user/{id}', {
+            id: user.githubId
+          });
+          if (githubUser && githubUser.login) {
+            username = githubUser.login;
+          }
+        } catch (e) {
+          console.log('Could not resolve username from ID, trying ID as username');
+        }
+
         const { data: installation } = await appOctokit.request('GET /users/{username}/installation', {
-          username: user.githubId,
+          username: username,
         });
       
         if (installation && installation.id) {
