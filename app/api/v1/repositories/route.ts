@@ -88,8 +88,8 @@ export async function GET(request: Request) {
       });
     }
 
-    // 3. Get an installation-authenticated client
-    const installationOctokit = getGithubClient(undefined, installationId);
+    // 3. Get a user-authenticated client
+    const userOctokit = getGithubClient(session.user.accessToken);
     
     // Fetch all repositories (GitHub API paginates at 30 per page)
     let repositories: any[] = [];
@@ -97,7 +97,8 @@ export async function GET(request: Request) {
     let hasMore = true;
     
     while (hasMore) {
-      const { data } = await installationOctokit.request('GET /installation/repositories', {
+      const { data } = await userOctokit.request('GET /user/installations/{installation_id}/repositories', {
+        installation_id: Number(installationId),
         per_page: 100,
         page: fetchPage,
       });

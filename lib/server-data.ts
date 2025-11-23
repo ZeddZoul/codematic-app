@@ -31,7 +31,7 @@ interface User {
  * Internal function to fetch dashboard statistics
  * Wrapped by cached version below
  */
-async function fetchDashboardStatsInternal(userId: string): Promise<DashboardStats | null> {
+async function fetchDashboardStatsInternal(userId: string, accessToken?: string): Promise<DashboardStats | null> {
   try {
 
     // Fetch total repositories from GitHub
@@ -70,14 +70,18 @@ async function fetchDashboardStatsInternal(userId: string): Promise<DashboardSta
         });
       
         if (installation && installation.id) {
-          // 3. Get an installation-authenticated client
-          // We pass undefined for accessToken (so it uses App Auth) and the specific installationId
-          const installationOctokit = getGithubClient(undefined, String(installation.id));
-          
-          // 4. List repositories for this installation
-          const { data: repos } = await installationOctokit.request('GET /installation/repositories');
-          totalRepositories = repos.total_count || repos.repositories?.length || 0;
-        }
+        // 3. Get a user-authenticated client (using the access token from session)
+        // We use the user's token to list repositories they have access to in this installation
+        const userOctokit = getGithubClient(accessToken);
+        
+        // 4. List repositories for this installation using User Token
+        // Endpoint: GET /user/installations/{installation_id}/repositories
+        const { data: repos } = await userOctokit.request('GET /user/installations/{installation_id}/repositories', {
+          installation_id: installation.id,
+          per_page: 100 // Get up to 100 repos
+        });
+        totalRepositories = repos.total_count || repos.repositories?.length || 0;
+      }
       }
     } catch (error) {
       console.error('Error fetching repositories count:', error);
@@ -224,7 +228,7 @@ export async function fetchDashboardStatsServer(): Promise<DashboardStats | null
 
   // Use Next.js unstable_cache for server-side caching with revalidation
   const getCachedStats = unstable_cache(
-    async (userId: string) => fetchDashboardStatsInternal(userId),
+    async (userId: string, accessToken?: string) => fetchDashboardStatsInternal(userId, accessToken),
     ['dashboard-stats'],
     {
       revalidate: 120, // Revalidate every 2 minutes
@@ -232,7 +236,7 @@ export async function fetchDashboardStatsServer(): Promise<DashboardStats | null
     }
   );
 
-  return getCachedStats(session.user.id);
+  return getCachedStats(session.user.id, session.user.accessToken);
 }
 
 /**
