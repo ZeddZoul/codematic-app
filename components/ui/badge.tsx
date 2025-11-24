@@ -1,6 +1,6 @@
 import React from 'react';
 import { colors } from '@/lib/design-system';
-import { DynamicIcon, IconName } from '@/lib/icons';
+import { DynamicIcon, IconName, IconState } from '@/lib/icons';
 
 type BadgeVariant = 'success' | 'warning' | 'error' | 'info' | 'processing';
 type BadgeSize = 'sm' | 'md' | 'lg';
@@ -62,6 +62,14 @@ export const Badge = React.memo<BadgeProps>(function Badge({ variant, size = 'md
     processing: 'loading',
   };
 
+  const stateMap: Record<BadgeVariant, IconState> = {
+    success: 'success',
+    warning: 'warning',
+    error: 'error',
+    info: 'info',
+    processing: 'info', // Use 'info' state for processing
+  };
+
   return (
     <span
       className={`inline-flex items-center font-semibold rounded-md transition-all duration-200 ${sizeStyles[size]} ${className}`}
@@ -70,7 +78,7 @@ export const Badge = React.memo<BadgeProps>(function Badge({ variant, size = 'md
       {showIcon && (
         <DynamicIcon
           icon={iconMap[variant]}
-          state={variant}
+          state={stateMap[variant]}
           size={iconSizes[size]}
           decorative
         />

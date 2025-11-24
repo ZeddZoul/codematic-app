@@ -22,6 +22,7 @@ import {
   FaChevronLeft,
   FaChevronRight,
   FaSignOutAlt,
+  FaSpinner,
 } from 'react-icons/fa';
 import { RiGitRepositoryFill } from 'react-icons/ri';
 import { VscIssues } from 'react-icons/vsc';
@@ -44,6 +45,7 @@ export const iconMap = {
   error: MdError,
   warning: FaExclamationTriangle,
   info: MdInfo,
+  loading: FaSpinner,
   
   // Additional status icons
   checkCircle: MdCheckCircle,
