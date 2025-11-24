@@ -5,6 +5,7 @@ export interface SessionData {
   user?: {
     id: string;
     githubId: string;
+    githubUsername?: string; // GitHub login username
     email: string;
     name: string;
     accessToken?: string;

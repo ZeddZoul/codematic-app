@@ -22,12 +22,53 @@ export async function GET() {
   }
 
   try {
-    // Fetch total repositories from GitHub
+    // Fetch total repositories from GitHub installation (same as repos page)
     let totalRepositories = 0;
     try {
-      const octokit = getGithubClient();
-      const { data } = await octokit.request('GET /installation/repositories');
-      totalRepositories = data.total_count || data.repositories?.length || 0;
+      const accessToken = session.user?.accessToken;
+      if (accessToken) {
+        // Get the App-authenticated client to find installation
+        const appOctokit = getGithubClient();
+        
+        // Find installation for this user
+        try {
+          // Get username from session or GitHub API
+          let username = session.user?.githubId;
+          
+          if (username && /^\d+$/.test(username)) {
+            // If it's a numeric ID, try to resolve to username
+            try {
+              const userOctokit = getGithubClient(accessToken);
+              const { data: githubUser } = await userOctokit.request('GET /user');
+              if (githubUser?.login) {
+                username = githubUser.login;
+              }
+            } catch (e) {
+              // Use numeric ID as fallback
+            }
+          }
+
+          if (username) {
+            const { data: installation } = await appOctokit.request('GET /users/{username}/installation', {
+              username: username,
+            });
+          
+            if (installation?.id) {
+              // Use installation-authenticated client to get repo count (same as repos page)
+              const installationOctokit = getGithubClient(undefined, String(installation.id));
+              const { data: repos } = await installationOctokit.request('GET /installation/repositories', {
+                per_page: 1 // We only need the total_count
+              });
+              totalRepositories = repos.total_count || 0;
+            }
+          }
+        } catch (installError: any) {
+          // If 404, app not installed - use 0
+          if (installError.status !== 404) {
+            console.error('Error fetching installation repos:', installError);
+          }
+        }
+      }
     } catch (error) {
       console.error('Error fetching repositories count:', error);
       // Continue with 0 if GitHub API fails

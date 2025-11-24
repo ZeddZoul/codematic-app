@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
     session.user = {
       id: user.id,
       githubId: user.githubId,
+      githubUsername: githubUser.login, // Store the GitHub username
       email: user.email,
       name: user.name || '',
       accessToken: tokenData.access_token,

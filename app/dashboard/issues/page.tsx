@@ -144,23 +144,16 @@ export default function IssuesHistoryPage() {
     router.push(`/check/results/${checkRun.id}`);
   }, [router]);
 
-  // Handle delete check runs with optimistic updates
+  // Handle delete check runs with proper cache invalidation
   const handleDelete = useCallback(async (checkRunIds: string[]) => {
-    // Store original state for potential rollback
-    const originalCheckRuns = checkRuns;
-    
-    // Optimistic update: immediately remove items from UI
-    const updatedCheckRuns = checkRuns.filter(run => !checkRunIds.includes(run.id));
-    setOptimisticCheckRuns(updatedCheckRuns);
-    setHasOptimisticUpdates(true);
-    
     try {
-      // Show optimistic success message
+      // Show deleting message
       showToast({
         type: 'info',
         message: `Deleting ${checkRunIds.length} check run${checkRunIds.length > 1 ? 's' : ''}...`,
       });
 
+      // Perform the delete operation
       const response = await fetch('/api/v1/checks/bulk-delete', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -172,43 +165,30 @@ export default function IssuesHistoryPage() {
         throw new Error(errorData.error || 'Failed to delete check runs');
       }
 
-      // Success - show final success message
-      showToast({
-        type: 'success',
-        message: `Successfully deleted ${checkRunIds.length} check run${checkRunIds.length > 1 ? 's' : ''}`,
-      });
+      // Invalidate all related caches
+      queryClient.invalidateQueries({ queryKey: queryKeys.checks.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats.all });
 
-      // Invalidate all related queries to ensure fresh data
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.checks.all,
-      });
-      
-      // Also invalidate dashboard stats since they might be affected
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.stats.all,
-      });
-
-      // Force a refetch to get the latest data
+      // Force refetch from the hook to update the UI
       await refetch();
 
-      // Reset optimistic updates flag after successful sync
-      setHasOptimisticUpdates(false);
+      // Show success message
+      showToast({
+        type: 'success',
+        message: `Deleted ${checkRunIds.length} check run${checkRunIds.length > 1 ? 's' : ''}`,
+      });
       
     } catch (error) {
       console.error('Delete failed:', error);
-      
-      // Revert optimistic update on error
-      setOptimisticCheckRuns(originalCheckRuns);
-      setHasOptimisticUpdates(false);
       
       showToast({
         type: 'error',
         message: error instanceof Error ? error.message : 'Failed to delete check runs',
       });
       
-      throw error; // Re-throw to let the table handle the error state
+      throw error;
     }
-  }, [checkRuns, showToast, queryClient, queryFilters, refetch]);
+  }, [showToast, queryClient, refetch]);
 
 
 

@@ -48,22 +48,28 @@ export async function GET(request: Request) {
     console.log('[DEBUG] Session user object:', JSON.stringify(session.user, null, 2));
 
     try {
-      let username = session.user?.githubId || '';
+      // Use the GitHub username from session, or fall back to resolving from OAuth token
+      let username = session.user?.githubUsername || '';
       
-      // Try to resolve numeric ID to username
-      if (username && /^\d+$/.test(username)) {
+      // If no username in session, try to get it from the OAuth token
+      if (!username && session.user?.accessToken) {
         try {
-          console.log('[DEBUG] Attempting to resolve numeric ID to username:', username);
-          const { data: githubUser } = await appOctokit.request('GET /user/{id}', {
-            id: username
-          });
+          console.log('[DEBUG] No username in session, fetching from GitHub API');
+          const userOctokit = getGithubClient(session.user.accessToken);
+          const { data: githubUser } = await userOctokit.request('GET /user');
           if (githubUser && githubUser.login) {
             username = githubUser.login;
-            console.log('[DEBUG] Resolved username:', username);
+            console.log('[DEBUG] Resolved username from OAuth token:', username);
           }
         } catch (e: any) {
-          console.log('[DEBUG] Could not resolve username from ID:', e.message);
+          console.log('[DEBUG] Could not resolve username from OAuth token:', e.message);
         }
+      }
+      
+      // Last resort: use numeric ID (will likely fail but worth trying)
+      if (!username) {
+        username = session.user?.githubId || '';
+        console.log('[DEBUG] Using numeric ID as fallback:', username);
       }
 
       console.log('[DEBUG] Looking up installation for username:', username);
@@ -100,9 +106,10 @@ export async function GET(request: Request) {
       });
     }
 
-    // 3. Get a user-authenticated client
-    console.log('[DEBUG] Creating user-authenticated client with access token present:', !!session.user?.accessToken);
-    const userOctokit = getGithubClient(session.user?.accessToken);
+    // 3. Get an installation-authenticated client
+    // We need to use the installation ID to create an installation access token
+    console.log('[DEBUG] Creating installation-authenticated client for installation:', installationId);
+    const installationOctokit = getGithubClient(undefined, installationId);
     
     // Fetch all repositories (GitHub API paginates at 30 per page)
     let repositories: any[] = [];
@@ -112,8 +119,7 @@ export async function GET(request: Request) {
     while (hasMore) {
       try {
         console.log(`[DEBUG] Fetching page ${fetchPage} for installation ${installationId}`);
-        const { data } = await userOctokit.request('GET /user/installations/{installation_id}/repositories', {
-          installation_id: Number(installationId),
+        const { data } = await installationOctokit.request('GET /installation/repositories', {
           per_page: 100,
           page: fetchPage,
         });

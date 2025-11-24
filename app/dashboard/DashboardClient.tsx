@@ -15,7 +15,7 @@ import { FaCodeBranch } from 'react-icons/fa';
 import { AiOutlineIssuesClose } from 'react-icons/ai';
 import { GiCheckedShield } from 'react-icons/gi';
 import { StatsCard } from '@/components/dashboard/StatsCard';
-import { TrendsChart } from '@/components/dashboard/TrendsChart';
+
 import { DashboardSkeleton } from '@/components/ui/skeletons';
 
 interface DashboardClientProps {
@@ -182,11 +182,6 @@ export function DashboardClient({ initialStats, initialUser }: DashboardClientPr
           icon={GiCheckedShield}
           loading={statsLoading && !initialStats}
         />
-      </div>
-
-      {/* Trends Chart */}
-      <div className="mb-8">
-        <TrendsChart />
       </div>
 
       {/* Quick Actions Section */}

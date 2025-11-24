@@ -62,10 +62,11 @@ export async function getFileContent(
 
 export async function getRepoBranches(
   owner: string,
-  repo: string
+  repo: string,
+  accessToken?: string
 ): Promise<Array<{ name: string; protected: boolean }>> {
   try {
-    const octokit = getGithubClient();
+    const octokit = getGithubClient(accessToken);
     const { data: branches } = await octokit.request(
       'GET /repos/{owner}/{repo}/branches',
       { owner, repo, per_page: 100 }
@@ -82,10 +83,11 @@ export async function getRepoBranches(
 
 export async function getDefaultBranch(
   owner: string,
-  repo: string
+  repo: string,
+  accessToken?: string
 ): Promise<string> {
   try {
-    const octokit = getGithubClient();
+    const octokit = getGithubClient(accessToken);
     const { data: repository } = await octokit.request(
       'GET /repos/{owner}/{repo}',
       { owner, repo }
