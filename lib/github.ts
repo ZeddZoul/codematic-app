@@ -10,7 +10,7 @@ import { createAppAuth } from '@octokit/auth-app';
  * 
  * For setup instructions, see: docs/github-app-setup.md
  */
-export function getGithubClient(accessToken?: string) {
+export function getGithubClient(accessToken?: string, installationId?: string) {
   if (accessToken) {
     return new Octokit({
       auth: accessToken,
@@ -20,13 +20,20 @@ export function getGithubClient(accessToken?: string) {
   const hasGithubConfig = process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY;
 
   if (hasGithubConfig) {
+    const authConfig: any = {
+      appId: process.env.GITHUB_APP_ID,
+      privateKey: (process.env.GITHUB_APP_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    };
+
+    // Only include installationId if provided or in env
+    const targetInstallationId = installationId || process.env.GITHUB_APP_INSTALLATION_ID;
+    if (targetInstallationId) {
+      authConfig.installationId = targetInstallationId;
+    }
+
     return new Octokit({
       authStrategy: createAppAuth,
-      auth: {
-        appId: process.env.GITHUB_APP_ID,
-        privateKey: (process.env.GITHUB_APP_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-        installationId: process.env.GITHUB_APP_INSTALLATION_ID,
-      },
+      auth: authConfig,
     });
   } else {
     return new Octokit();
@@ -48,17 +55,18 @@ export async function getFileContent(
     );
     return Buffer.from(content.content, 'base64').toString('utf-8');
   } catch (error) {
-    console.error(`[GitHub] Error fetching ${path}:`, error);
+    console.error(`[GitHub] Error fetching ${path}:`, error instanceof Error ? error.message : 'Unknown error');
     return null;
   }
 }
 
 export async function getRepoBranches(
   owner: string,
-  repo: string
+  repo: string,
+  accessToken?: string
 ): Promise<Array<{ name: string; protected: boolean }>> {
   try {
-    const octokit = getGithubClient();
+    const octokit = getGithubClient(accessToken);
     const { data: branches } = await octokit.request(
       'GET /repos/{owner}/{repo}/branches',
       { owner, repo, per_page: 100 }
@@ -68,24 +76,25 @@ export async function getRepoBranches(
       protected: branch.protected,
     }));
   } catch (error) {
-    console.error('Error fetching branches:', error);
+    console.error('Error fetching branches:', error instanceof Error ? error.message : 'Unknown error');
     return [];
   }
 }
 
 export async function getDefaultBranch(
   owner: string,
-  repo: string
+  repo: string,
+  accessToken?: string
 ): Promise<string> {
   try {
-    const octokit = getGithubClient();
+    const octokit = getGithubClient(accessToken);
     const { data: repository } = await octokit.request(
       'GET /repos/{owner}/{repo}',
       { owner, repo }
     );
     return repository.default_branch || 'main';
   } catch (error) {
-    console.error('Error fetching default branch:', error);
+    console.error('Error fetching default branch:', error instanceof Error ? error.message : 'Unknown error');
     return 'main';
   }
 }

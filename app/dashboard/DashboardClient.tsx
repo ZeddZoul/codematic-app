@@ -8,13 +8,14 @@ import { colors } from '@/lib/design-system';
 import { useToast } from '@/lib/hooks/useToast';
 import { useUser } from '@/lib/hooks/useUser';
 import { useDashboardStats } from '@/lib/hooks/useDashboardStats';
+import { useCompletionNotifications } from '@/lib/hooks/useCompletionNotifications';
 import { DynamicIcon } from '@/lib/icons';
 import { MdDashboard, MdWarning } from 'react-icons/md';
 import { FaCodeBranch } from 'react-icons/fa';
 import { AiOutlineIssuesClose } from 'react-icons/ai';
 import { GiCheckedShield } from 'react-icons/gi';
 import { StatsCard } from '@/components/dashboard/StatsCard';
-import { TrendsChart } from '@/components/dashboard/TrendsChart';
+
 import { DashboardSkeleton } from '@/components/ui/skeletons';
 
 interface DashboardClientProps {
@@ -47,6 +48,9 @@ export function DashboardClient({ initialStats, initialUser }: DashboardClientPr
   const { data: stats, isLoading: statsLoading, error: statsError } = useDashboardStats({
     initialData: initialStats,
   });
+
+  // Enable completion notifications
+  useCompletionNotifications();
 
   /**
    * Effect: Redirect to login if user authentication fails
@@ -178,11 +182,6 @@ export function DashboardClient({ initialStats, initialUser }: DashboardClientPr
           icon={GiCheckedShield}
           loading={statsLoading && !initialStats}
         />
-      </div>
-
-      {/* Trends Chart */}
-      <div className="mb-8">
-        <TrendsChart />
       </div>
 
       {/* Quick Actions Section */}

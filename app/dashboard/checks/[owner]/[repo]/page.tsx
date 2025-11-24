@@ -462,16 +462,7 @@ export default function CheckHistoryPage() {
             ))}
           </div>
 
-          {/* Run New Check Button - At the bottom */}
-          <div className="flex justify-center pt-6 border-t" style={{ borderColor: colors.text.secondary + '20' }}>
-            <Button 
-              onClick={openCheckDialog}
-              className="flex items-center gap-2 px-6 py-3"
-            >
-              <FaPlay size={16} />
-              Run New Check
-            </Button>
-          </div>
+
         </>
       )}
 

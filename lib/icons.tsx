@@ -22,6 +22,7 @@ import {
   FaChevronLeft,
   FaChevronRight,
   FaSignOutAlt,
+  FaSpinner,
 } from 'react-icons/fa';
 import { RiGitRepositoryFill } from 'react-icons/ri';
 import { VscIssues } from 'react-icons/vsc';
@@ -44,6 +45,7 @@ export const iconMap = {
   error: MdError,
   warning: FaExclamationTriangle,
   info: MdInfo,
+  loading: FaSpinner,
   
   // Additional status icons
   checkCircle: MdCheckCircle,
@@ -139,7 +141,6 @@ export const DynamicIcon: React.FC<DynamicIconProps> = ({
   const IconComponent = typeof icon === 'string' ? iconMap[icon] : icon;
   
   if (!IconComponent) {
-    console.warn(`Icon "${icon}" not found in iconMap`);
     return null;
   }
 

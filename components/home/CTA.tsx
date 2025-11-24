@@ -27,13 +27,13 @@ export function CTA() {
               Join thousands of developers who use Themis to ensure their apps are compliant and ready for the store.
             </p>
             <Link href="/login">
-              <Button 
-                className="h-14 px-10 text-lg rounded-full bg-white hover:bg-gray-50 transition-all shadow-xl"
+              <button 
+                className="inline-flex items-center justify-center h-14 px-10 text-base font-semibold rounded-full bg-white transition-all duration-200 hover:bg-gray-50 shadow-xl"
                 style={{ color: colors.primary.accent }}
               >
                 Start Checking Now
-                <FaArrowRight className="ml-2" />
-              </Button>
+                <FaArrowRight className="ml-2 text-sm" />
+              </button>
             </Link>
           </div>
         </div>

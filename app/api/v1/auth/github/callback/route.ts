@@ -5,9 +5,14 @@ import { getSession } from '@/lib/session';
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get('code');
+  
+  // Get proper base URL
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                 process.env.NEXTAUTH_URL || 
+                 `${request.headers.get('x-forwarded-proto') || 'https'}://${request.headers.get('host')}`;
 
   if (!code) {
-    return NextResponse.redirect(new URL('/login?error=no_code', request.url));
+    return NextResponse.redirect(`${baseUrl}/login?error=no_code`);
   }
 
   try {
@@ -28,7 +33,7 @@ export async function GET(request: NextRequest) {
     const tokenData = await tokenResponse.json();
 
     if (tokenData.error) {
-      return NextResponse.redirect(new URL('/login?error=token_error', request.url));
+      return NextResponse.redirect(`${baseUrl}/login?error=token_error`);
     }
 
     // Get user info from GitHub
@@ -60,6 +65,7 @@ export async function GET(request: NextRequest) {
     session.user = {
       id: user.id,
       githubId: user.githubId,
+      githubUsername: githubUser.login, // Store the GitHub username
       email: user.email,
       name: user.name || '',
       accessToken: tokenData.access_token,
@@ -70,24 +76,45 @@ export async function GET(request: NextRequest) {
     // Check if GitHub App is installed
     try {
       const { getGithubClient } = await import('@/lib/github');
-      const octokit = getGithubClient();
-      await octokit.request('GET /installation/repositories');
-      // App is installed, go to dashboard
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      
+      // Use App Authentication (JWT) to check if the user has installed the app
+      // This is more reliable than using the user token which might have limited scopes
+      const appOctokit = getGithubClient();
+      
+      console.log(`Checking installation for user: ${githubUser.login}`);
+      
+      try {
+        await appOctokit.request('GET /users/{username}/installation', {
+          username: githubUser.login,
+        });
+        
+        // If we get here (200 OK), the app is installed
+        console.log('Installation found via App Auth');
+        return NextResponse.redirect(`${baseUrl}/dashboard`);
+      } catch (err: any) {
+        if (err.status === 404) {
+          console.log('No installation found via App Auth (404)');
+          return NextResponse.redirect(`${baseUrl}/install-app`);
+        }
+        throw err; // Re-throw other errors
+      }
     } catch (error) {
-      // App not installed, redirect to installation page
-      return NextResponse.redirect(new URL('/install-app', request.url));
+      console.error('Error checking installation status:', error);
+      // App not installed or error checking, redirect to installation page
+      return NextResponse.redirect(`${baseUrl}/install-app`);
     }
   } catch (error) {
-    console.error('=== AUTH ERROR DETAILS ===');
-    console.error('Error:', error);
-    console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
-    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-    console.error('Environment check:');
-    console.error('- GITHUB_CLIENT_ID:', process.env.GITHUB_CLIENT_ID ? 'Set' : 'MISSING');
-    console.error('- GITHUB_CLIENT_SECRET:', process.env.GITHUB_CLIENT_SECRET ? 'Set' : 'MISSING');
-    console.error('- SESSION_SECRET:', process.env.SESSION_SECRET ? 'Set' : 'MISSING');
-    console.error('=========================');
-    return NextResponse.redirect(new URL('/login?error=auth_failed', request.url));
+    console.error('GitHub auth failed:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    
+    // Get proper base URL
+    const host = request.headers.get('host');
+    const protocol = request.headers.get('x-forwarded-proto') || 'https';
+    const baseUrl = `${protocol}://${host}`;
+    
+    return NextResponse.redirect(`${baseUrl}/login?error=auth_failed`);
   }
 }

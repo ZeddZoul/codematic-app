@@ -35,39 +35,117 @@ export async function GET(request: Request) {
     const pageSize = parseInt(searchParams.get('pageSize') || '10', 10);
     const search = searchParams.get('search') || '';
 
-    console.log('Fetching repositories...');
-    console.log('GitHub App ID:', process.env.GITHUB_APP_ID);
-    console.log('Installation ID:', process.env.GITHUB_APP_INSTALLATION_ID);
-    console.log('Pagination:', { page, pageSize, search });
+
     
-    const octokit = getGithubClient();
+    // 1. Get the App-authenticated client (JWT)
+    const appOctokit = getGithubClient();
+    
+    // 2. Find the installation ID for this user
+    // We need to know which installation to query
+    let installationId: string | undefined;
+    
+    console.log('[DEBUG] Fetching repos for user:', session.user?.githubId);
+    console.log('[DEBUG] Session user object:', JSON.stringify(session.user, null, 2));
+
+    try {
+      // Use the GitHub username from session, or fall back to resolving from OAuth token
+      let username = session.user?.githubUsername || '';
+      
+      // If no username in session, try to get it from the OAuth token
+      if (!username && session.user?.accessToken) {
+        try {
+          console.log('[DEBUG] No username in session, fetching from GitHub API');
+          const userOctokit = getGithubClient(session.user.accessToken);
+          const { data: githubUser } = await userOctokit.request('GET /user');
+          if (githubUser && githubUser.login) {
+            username = githubUser.login;
+            console.log('[DEBUG] Resolved username from OAuth token:', username);
+          }
+        } catch (e: any) {
+          console.log('[DEBUG] Could not resolve username from OAuth token:', e.message);
+        }
+      }
+      
+      // Last resort: use numeric ID (will likely fail but worth trying)
+      if (!username) {
+        username = session.user?.githubId || '';
+        console.log('[DEBUG] Using numeric ID as fallback:', username);
+      }
+
+      console.log('[DEBUG] Looking up installation for username:', username);
+      const { data: installation } = await appOctokit.request('GET /users/{username}/installation', {
+        username: username,
+      });
+      
+      console.log('[DEBUG] Installation response:', JSON.stringify(installation, null, 2));
+      
+      if (installation && installation.id) {
+        installationId = String(installation.id);
+        console.log('[DEBUG] Found installation ID:', installationId);
+      }
+    } catch (error: any) {
+      console.log('[DEBUG] Error finding installation:', error.status, error.message);
+      console.log('[DEBUG] Full error:', JSON.stringify(error, null, 2));
+      if (error.status === 404) {
+        // App not installed for this user
+        return NextResponse.json({ 
+          repositories: [],
+          pagination: { total: 0, page: 1, pageSize, totalPages: 0 },
+          needsInstallation: true 
+        });
+      }
+      throw error;
+    }
+
+    if (!installationId) {
+      console.log('[DEBUG] No installation ID found');
+      return NextResponse.json({ 
+        repositories: [],
+        pagination: { total: 0, page: 1, pageSize, totalPages: 0 },
+        needsInstallation: true 
+      });
+    }
+
+    // 3. Get an installation-authenticated client
+    // We need to use the installation ID to create an installation access token
+    console.log('[DEBUG] Creating installation-authenticated client for installation:', installationId);
+    const installationOctokit = getGithubClient(undefined, installationId);
     
     // Fetch all repositories (GitHub API paginates at 30 per page)
     let repositories: any[] = [];
-    let currentPage = 1;
+    let fetchPage = 1;
     let hasMore = true;
     
     while (hasMore) {
-      const { data } = await octokit.request('GET /installation/repositories', {
-        per_page: 100,
-        page: currentPage,
-      });
-      
-      repositories = repositories.concat(data.repositories || []);
-      
-      // Check if there are more pages
-      hasMore = data.repositories && data.repositories.length === 100;
-      currentPage++;
-      
-      // Safety limit to prevent infinite loops
-      if (currentPage > 10) break;
+      try {
+        console.log(`[DEBUG] Fetching page ${fetchPage} for installation ${installationId}`);
+        const { data } = await installationOctokit.request('GET /installation/repositories', {
+          per_page: 100,
+          page: fetchPage,
+        });
+        
+        console.log(`[DEBUG] Page ${fetchPage} response:`, JSON.stringify(data, null, 2));
+        console.log(`[DEBUG] Page ${fetchPage} returned ${data.repositories?.length || 0} repos`);
+        console.log(`[DEBUG] Total count in response:`, data.total_count);
+        
+        repositories = repositories.concat(data.repositories || []);
+        
+        // Check if there are more pages
+        hasMore = data.repositories && data.repositories.length === 100;
+        fetchPage++;
+        
+        // Safety limit to prevent infinite loops
+        if (fetchPage > 10) break;
+      } catch (err: any) {
+        console.error('[DEBUG] Error listing repos:', err.message);
+        console.error('[DEBUG] Full error:', JSON.stringify(err, null, 2));
+        throw err;
+      }
     }
     
-    console.log('Found repositories:', repositories.length);
+    console.log('[DEBUG] Total repositories fetched:', repositories.length);
     
-    if (repositories.length > 0) {
-      console.log('Repository names:', repositories.map((r: any) => r.full_name));
-    }
+
 
     // Apply search filter
     if (search) {
@@ -174,9 +252,9 @@ export async function GET(request: Request) {
       },
     });
   } catch (error: any) {
-    console.error('Error fetching repositories:', error.message);
-    console.error('Error status:', error.status);
-    console.error('Error details:', error.response?.data || error);
+    console.error('Error fetching repositories:', error.message || 'Unknown error');
+    console.error('Full error stack:', error.stack);
+    console.error('Error object:', JSON.stringify(error, null, 2));
     
     // Return empty array instead of error so UI doesn't break
     return NextResponse.json({ 

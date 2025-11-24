@@ -31,17 +31,61 @@ interface User {
  * Internal function to fetch dashboard statistics
  * Wrapped by cached version below
  */
-async function fetchDashboardStatsInternal(userId: string): Promise<DashboardStats | null> {
+async function fetchDashboardStatsInternal(userId: string, accessToken?: string): Promise<DashboardStats | null> {
   try {
 
-    // Fetch total repositories from GitHub
+    // Fetch total repositories from GitHub installation (same as repos page)
     let totalRepositories = 0;
     try {
-      const octokit = getGithubClient();
-      const { data } = await octokit.request('GET /installation/repositories');
-      totalRepositories = data.total_count || data.repositories?.length || 0;
+      if (accessToken) {
+        // Get the App-authenticated client to find installation
+        const appOctokit = getGithubClient();
+        
+        // Get user from database
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { githubId: true }
+        });
+
+        if (user?.githubId) {
+          let username = user.githubId;
+          
+          // Try to resolve numeric ID to username
+          try {
+            const { data: githubUser } = await appOctokit.request('GET /user/{id}', {
+              id: user.githubId
+            });
+            if (githubUser?.login) {
+              username = githubUser.login;
+            }
+          } catch (e) {
+            // Use githubId as username if resolution fails
+          }
+
+          // Find installation for this user
+          try {
+            const { data: installation } = await appOctokit.request('GET /users/{username}/installation', {
+              username: username,
+            });
+          
+            if (installation?.id) {
+              // Use installation-authenticated client to get repo count (same as repos page)
+              const installationOctokit = getGithubClient(undefined, String(installation.id));
+              const { data: repos } = await installationOctokit.request('GET /installation/repositories', {
+                per_page: 1 // We only need the total_count
+              });
+              totalRepositories = repos.total_count || 0;
+            }
+          } catch (installError: any) {
+            // If 404, app not installed - use 0
+            if (installError.status !== 404) {
+              console.error('Error fetching installation repos:', installError);
+            }
+          }
+        }
+      }
     } catch (error) {
-      console.error('Error fetching repositories count:', error);
+      console.error('Error counting repositories:', error);
     }
 
     // Get current date ranges for trend calculation
@@ -49,44 +93,54 @@ async function fetchDashboardStatsInternal(userId: string): Promise<DashboardSta
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
-    // Fetch all recent reports (last 30 days)
-    const recentReports = await prisma.complianceReport.findMany({
+    // Fetch all recent check runs (last 30 days)
+    const recentReports = await prisma.checkRun.findMany({
       where: {
         createdAt: {
           gte: thirtyDaysAgo,
         },
+        status: 'COMPLETED', // Only count completed checks
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
 
-    // Fetch reports from 30-60 days ago for trend comparison
-    const previousReports = await prisma.complianceReport.findMany({
+    // Fetch check runs from 30-60 days ago for trend comparison
+    const previousReports = await prisma.checkRun.findMany({
       where: {
         createdAt: {
           gte: sixtyDaysAgo,
           lt: thirtyDaysAgo,
         },
+        status: 'COMPLETED',
       },
     });
 
-    // Calculate pending issues from recent reports
-    let pendingIssues = 0;
-    const repositoryIssues = new Map<string, number>();
-
+    // Get the latest check run per repository
+    const repositoryLatestChecks = new Map<string, any>();
+    
     recentReports.forEach((report: any) => {
-      const issues = report.issues as any;
-      if (Array.isArray(issues)) {
-        const repoKey = report.installationId;
-        if (!repositoryIssues.has(repoKey)) {
-          repositoryIssues.set(repoKey, issues.length);
-        }
+      const repoKey = report.repositoryId;
+      const existing = repositoryLatestChecks.get(repoKey);
+      
+      // Keep the most recent check for each repository
+      if (!existing || new Date(report.createdAt) > new Date(existing.createdAt)) {
+        repositoryLatestChecks.set(repoKey, report);
       }
     });
 
-    repositoryIssues.forEach((count) => {
-      pendingIssues += count;
+    // Calculate pending issues from latest check per repository
+    let pendingIssues = 0;
+    const repositoryIssues = new Map<string, number>();
+
+    repositoryLatestChecks.forEach((report: any, repoKey: string) => {
+      const issues = report.issues as any;
+      if (Array.isArray(issues)) {
+        const issueCount = issues.length;
+        repositoryIssues.set(repoKey, issueCount);
+        pendingIssues += issueCount;
+      }
     });
 
     const recentChecks = recentReports.length;
@@ -126,21 +180,30 @@ async function fetchDashboardStatsInternal(userId: string): Promise<DashboardSta
           )
         : 0;
 
-    let previousPendingIssues = 0;
-    const previousRepositoryIssues = new Map<string, number>();
-
+    // Get the latest check run per repository for previous period
+    const previousRepositoryLatestChecks = new Map<string, any>();
+    
     previousReports.forEach((report: any) => {
-      const issues = report.issues as any;
-      if (Array.isArray(issues)) {
-        const repoKey = report.installationId;
-        if (!previousRepositoryIssues.has(repoKey)) {
-          previousRepositoryIssues.set(repoKey, issues.length);
-        }
+      const repoKey = report.repositoryId;
+      const existing = previousRepositoryLatestChecks.get(repoKey);
+      
+      // Keep the most recent check for each repository
+      if (!existing || new Date(report.createdAt) > new Date(existing.createdAt)) {
+        previousRepositoryLatestChecks.set(repoKey, report);
       }
     });
 
-    previousRepositoryIssues.forEach((count) => {
-      previousPendingIssues += count;
+    // Issue trend: compare total issues
+    let previousPendingIssues = 0;
+    const previousRepositoryIssues = new Map<string, number>();
+
+    previousRepositoryLatestChecks.forEach((report: any, repoKey: string) => {
+      const issues = report.issues as any;
+      if (Array.isArray(issues)) {
+        const issueCount = issues.length;
+        previousRepositoryIssues.set(repoKey, issueCount);
+        previousPendingIssues += issueCount;
+      }
     });
 
     const issueTrendValue =
@@ -184,7 +247,7 @@ export async function fetchDashboardStatsServer(): Promise<DashboardStats | null
 
   // Use Next.js unstable_cache for server-side caching with revalidation
   const getCachedStats = unstable_cache(
-    async (userId: string) => fetchDashboardStatsInternal(userId),
+    async (userId: string, accessToken?: string) => fetchDashboardStatsInternal(userId, accessToken),
     ['dashboard-stats'],
     {
       revalidate: 120, // Revalidate every 2 minutes
@@ -192,7 +255,7 @@ export async function fetchDashboardStatsServer(): Promise<DashboardStats | null
     }
   );
 
-  return getCachedStats(session.user.id);
+  return getCachedStats(session.user.id, session.user.accessToken);
 }
 
 /**

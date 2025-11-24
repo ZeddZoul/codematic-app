@@ -14,10 +14,11 @@ export async function GET(
 
   try {
     const { owner, repo } = params;
+    const accessToken = session.user?.accessToken;
 
     const [branches, defaultBranch] = await Promise.all([
-      getRepoBranches(owner, repo),
-      getDefaultBranch(owner, repo),
+      getRepoBranches(owner, repo, accessToken),
+      getDefaultBranch(owner, repo, accessToken),
     ]);
 
     return NextResponse.json({

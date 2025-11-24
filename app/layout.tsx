@@ -11,8 +11,8 @@ export const metadata: Metadata = {
   title: "Themis - Mobile App Compliance",
   description: "Automated compliance checking for Apple App Store and Google Play Store",
   icons: {
-    icon: '/icon.png',
-    apple: '/icon.png',
+    icon: '/favicon.png',
+    apple: '/favicon.png',
   },
 };
 
