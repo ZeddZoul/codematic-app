@@ -57,6 +57,43 @@ function logDebug(message: string) {
   console.log(`[${timestamp}] ${message}`);
 }
 
+/**
+ * Retry wrapper for API calls with exponential backoff
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  initialDelay: number = 1000
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if it's a retryable error (503, 429, or UNAVAILABLE)
+      const isRetryable = 
+        error?.status === 503 || 
+        error?.status === 429 ||
+        error?.message?.includes('overloaded') ||
+        error?.message?.includes('UNAVAILABLE');
+      
+      if (!isRetryable || attempt === maxRetries - 1) {
+        throw error;
+      }
+      
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = initialDelay * Math.pow(2, attempt);
+      console.log(`[Retry] Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
+}
+
 
 
 export async function analyzeRepositoryCompliance(
@@ -372,10 +409,12 @@ Return exactly ${issues.length} objects in the array, one for each issue in orde
 
     console.log(`[Batch AI] Sending batch request for ${issues.length} issues to Gemini 2.5 Flash...`);
     
-    const result = await genAI.models.generateContent({
-      ...getGeminiConfig('batch'),
-      contents: prompt,
-    });
+    const result = await retryWithBackoff(() => 
+      genAI.models.generateContent({
+        ...getGeminiConfig('batch'),
+        contents: prompt,
+      })
+    );
     
     const text = result.text || '';
     console.log(`[Batch AI] ✅ Received response. Length: ${text.length}`);
@@ -538,10 +577,12 @@ The JSON must follow this structure:
     
     let result;
     try {
-      result = await genAI.models.generateContent({
-        ...getGeminiConfig('individual'),
-        contents: prompt,
-      });
+      result = await retryWithBackoff(() =>
+        genAI.models.generateContent({
+          ...getGeminiConfig('individual'),
+          contents: prompt,
+        })
+      );
     } catch (apiError) {
       console.error(`[AI Augmentation] ❌ Gemini API call failed for ${issue.ruleId}:`, {
         error: apiError instanceof Error ? apiError.message : String(apiError),
@@ -679,10 +720,12 @@ Respond ONLY with valid JSON:
 }`;
 
     console.log(`[AI Content Validation] Sending prompt for ${filePath} (type: ${expectedType})...`);
-    const result = await genAI.models.generateContent({
-      ...getGeminiConfig('validation'),
-      contents: prompt,
-    });
+    const result = await retryWithBackoff(() =>
+      genAI.models.generateContent({
+        ...getGeminiConfig('validation'),
+        contents: prompt,
+      })
+    );
     const text = result.text || '';
     
     console.log(`[AI Content Validation] Received response for ${filePath}. Length: ${text.length}`);
